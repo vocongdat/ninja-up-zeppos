@@ -50,3 +50,17 @@ test("settings button pushes setting/index", async () => {
   btn.props.click_func();
   assert.equal(router.pushes[0].page, "setting/index");
 });
+
+test("onResume re-renders so a new record shows without duplicating widgets", async () => {
+  const page = await loadMenu();
+  page.onInit(); page.build();
+  const before = hmUI.live().length;
+  assert.ok(!hmUI.live().some((w) => w.type === "TEXT" && w.props.text.includes("77")));
+  localStorage.setItem("record", "77");
+  page.onResume();
+  assert.ok(
+    hmUI.live().some((w) => w.type === "TEXT" && w.props.text.includes("77")),
+    "record refreshed on resume: " + hmUI.live().filter((w) => w.type === "TEXT").map((w) => w.props.text).join("|"),
+  );
+  assert.equal(hmUI.live().length, before, "no duplicate widgets after resume");
+});
