@@ -67,9 +67,10 @@ export function apply(s, world, nowMs) {
   const ms = nowMs === undefined ? Date.now() : nowMs;
 
   // Nền scroll theo alt: Y = -(alt % H); IMG thứ hai nối tiếp phía dưới.
+  // Mỗi IMG một try riêng: 1 nền chết không chặn nền còn lại.
   const off = world.alt % H;
-  s.bg[0].setProperty("Y", Math.floor(-off));
-  s.bg[1].setProperty("Y", Math.floor(H - off));
+  try { s.bg[0].setProperty("Y", Math.floor(-off)); } catch (e) {}
+  try { s.bg[1].setProperty("Y", Math.floor(H - off)); } catch (e) {}
 
   // HUD điểm theo mét.
   try { s.hudText.setProperty("TEXT", scoreOf(world) + " M"); } catch (e) {}

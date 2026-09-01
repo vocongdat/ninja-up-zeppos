@@ -11,9 +11,10 @@
 //  - nowMs của apply() là tuỳ chọn: game.js luôn truyền, test có thể bỏ.
 import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import hmUI, { resetRegistry } from "@zos/ui";
+import hmUI, { resetRegistry, registry } from "@zos/ui";
 import { buildSprites, apply } from "../page/draw.js";
 import { createWorld } from "../page/game-core.js";
+import { H } from "../page/ui.js";
 
 beforeEach(() => { resetRegistry(); });
 
@@ -37,8 +38,9 @@ test("buildSprites creates a fixed pool (bg2, towers2, hudBg+text, planks5, shur
   }
   assert.ok(Array.isArray(s.overlay), "overlay is a real array");
   // Band 0 mặc định: bg-dusk.png (đổi SOURCE theo score band là việc của Task 8).
-  assert.equal(s.bg[0].props.src, "bg-dusk.png");
-  assert.equal(s.bg[1].props.src, "bg-dusk.png");
+  // Đọc qua getProperty("SOURCE") — fake alias src tạo-lúc-tạo-widget → source.
+  assert.equal(s.bg[0].getProperty("SOURCE"), "bg-dusk.png");
+  assert.equal(s.bg[1].getProperty("SOURCE"), "bg-dusk.png");
 });
 
 test("apply positions planks and ninja from world state", () => {
@@ -71,6 +73,22 @@ test("shuriken slots beyond live count are hidden", () => {
   assert.equal(s.shurikens[0].getProperty("VISIBLE"), true);
   assert.equal(s.shurikens[1].getProperty("VISIBLE"), false);
   assert.equal(s.shurikens[2].getProperty("VISIBLE"), false);
+});
+
+test("apply survives a dead bg widget and still renders the rest of the frame", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.alt = 160; // điểm 20 M
+  // Giết bg[0] như trên máy thật: widget đã bị xoá thì setProperty ném.
+  hmUI.deleteWidget(s.bg[0]);
+  // apply() trước đây để 2 lệnh setProperty("Y") nền ngoài try/catch — một widget
+  // nền chết làm ném cả frame (HUD, plank, shuriken, ninja đều treo). Bắt buộc:
+  // apply KHÔNG ném và phần còn lại của frame vẫn render.
+  assert.doesNotThrow(() => apply(s, w));
+  assert.equal(s.hudText.getProperty("TEXT"), "20 M", "HUD vẫn cập nhật");
+  assert.equal(s.ninja.getProperty("X"), Math.floor(w.ninja.x), "ninja vẫn được đặt vị trí");
+  // bg[1] còn sống vẫn nhận Y (scroll tiếp diễn với phần nền còn lại).
+  assert.equal(s.bg[1].getProperty("Y"), Math.floor(H - (w.alt % H)));
 });
 
 test("shuriken frame flips at 8Hz via nowMs", () => {

@@ -6,7 +6,7 @@ export function resetRegistry() {
 export function live() { return registry.widgets.filter((w) => w.alive); }
 export function liveByType() { const o = {}; for (const w of live()) o[w.type] = (o[w.type] || 0) + 1; return o; }
 class Widget {
-  constructor(type, props) { this.id = registry.nextId++; this.type = type; this.props = Object.assign({}, props); this.alive = true; this.visible = undefined; this.setPropertyCalls = []; this.zIndex = this.id; }
+  constructor(type, props) { this.id = registry.nextId++; this.type = type; this.props = Object.assign({}, props); if (this.props.src !== undefined && this.props.source === undefined) this.props.source = this.props.src; this.alive = true; this.visible = undefined; this.setPropertyCalls = []; this.zIndex = this.id; }
   setProperty(key, value) {
     if (!this.alive) { registry.setPropsAfterDelete.push({ id: this.id, type: this.type, key, value }); throw new Error("setProperty on deleted widget " + this.id); }
     this.setPropertyCalls.push([key, value]);
