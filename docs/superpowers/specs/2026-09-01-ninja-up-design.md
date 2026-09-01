@@ -61,8 +61,7 @@ Hệ toạ độ: y=0 đỉnh màn, ninja leo lên = `alt` (px) tăng. Điểm h
 - **Shuriken spawn**: phía trên đỉnh màn, mỗi 1.2–2.2s (càng cao càng dày), đi ngang
   qua lối đi; xoay giả = sprite 2 frame (X / +) đổi 8Hz.
 - **Chết**: AABB với shuriken, hoặc rơi khỏi đáy màn. Không giới hạn thời gian.
-- **Nền theo tầng cao**: 3 band (chiều → hoàng hôn → đêm sao), lặp lại khi leo tiếp.
-  Crossfade 2 IMG chồng alpha. Mây trang trí scroll chậm hơn nền (parallax).
+- **Nền theo tầng cao**: 3 band (chiều → hoàng hôn → đêm sao), **chọn theo điểm mốc 10 / 20 M** — vượt mốc thì đổi SOURCE của 2 IMG nền sang PNG band mới (không crossfade alpha — phức tạp hơn lợi ích v1). Mây/sao là **một phần của ảnh nền tĩnh**, không phải sprite riêng (parallax động không làm trong v1).
 
 ## 4. Render — widget di chuyển, không xoá/tạo
 
