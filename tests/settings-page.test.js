@@ -113,7 +113,19 @@ test("corrupt settings JSON still builds and first toggle writes valid JSON", as
   // Corrupt start falls back to {} defaults, so muteMusic is simply absent
   // (undefined === falsy, which is exactly what sound.js's !!s.muteMusic reads).
   assert.ok(!("muteMusic" in s), "untouched flag stays absent-falsy, not materialised: " + raw);
-  assert.ok(!raw.includes("not"), "stored value is clean JSON, not the corrupt leftover");
+  assert.ok(!Array.isArray(s) && s && typeof s === "object", "stored value is a plain object: " + raw);
+});
+
+test("settings stored as a JSON array does not make toggles inert", async () => {
+  localStorage.setItem("settings", "[]");
+  const page = await loadSettings();
+  page.onInit(); page.build();
+  assert.ok(findRow("SFX"), "page built with array settings");
+  findRow("SFX").props.click_func();
+  const raw = localStorage.getItem("settings");
+  const s = JSON.parse(raw);
+  assert.ok(!Array.isArray(s), "stored value must be a plain object, not an array: " + raw);
+  assert.equal(s.muteSfx, true, "toggle persisted on a plain object: " + raw);
 });
 
 test("corrupt record value still builds and clear record still works", async () => {

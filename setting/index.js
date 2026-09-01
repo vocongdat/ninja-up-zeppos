@@ -23,11 +23,13 @@ function clearRecord() {
 // settings hỏng/không có → {}
 // Fail-open ở đây (hiện "Bật") là chủ ý: page chỉ hiển thị, còn sound.js
 // (Task 4) mới là nơi phát âm và nó fail-closed khi JSON hỏng.
+// !Array.isArray: JSON "[]" parse thành array — gán prop lên array bị
+// JSON.stringify bỏ đi, khiến toggle trở nên vô hiệu vĩnh viễn.
 function readSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     const s = raw ? JSON.parse(raw) : {};
-    return s && typeof s === "object" ? s : {};
+    return s && !Array.isArray(s) && typeof s === "object" ? s : {};
   } catch (e) { return {}; }
 }
 
@@ -37,7 +39,7 @@ function writeSettings(s) {
 
 Page({
   onInit() {
-    this.state = { widgets: [], sfxRow: null, musicRow: null, recordRow: null };
+    this.state = { widgets: [] };
   },
   // keep(): track widget để re-render có thể xoá. pageChrome() trả về mảng
   // [title TEXT, back BUTTON "‹"] — flatten; fillBackground/button trả về đơn.
@@ -56,7 +58,7 @@ Page({
     this.keep(pageChrome("Cài đặt", () => router.back()));
     const s = readSettings();
 
-    this.state.sfxRow = this.keep(button({
+    this.keep(button({
       x: 16, y: 90, w: W - 32, h: 56,
       text: "Âm thanh SFX: " + (s.muteSfx ? "Tắt" : "Bật"),
       onClick: () => {
@@ -66,7 +68,7 @@ Page({
         this.render();
       },
     }));
-    this.state.musicRow = this.keep(button({
+    this.keep(button({
       x: 16, y: 160, w: W - 32, h: 56,
       text: "Nhạc nền: " + (s.muteMusic ? "Tắt" : "Bật"),
       onClick: () => {
@@ -76,7 +78,7 @@ Page({
         this.render();
       },
     }));
-    this.state.recordRow = this.keep(button({
+    this.keep(button({
       x: 16, y: 230, w: W - 32, h: 56,
       text: "Xoá kỷ lục",
       onClick: () => {
