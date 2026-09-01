@@ -1,36 +1,117 @@
-// page/draw.js — STUB for Task 6 TDD: page/game.js needs buildSprites()/apply()
-// to exist, but the real renderer is Task 7. This stub builds a static pool
-// (overlay MUST be a real array — page/game.js pushes overlay widgets into it
-// and clearOverlay() deletes them) and makes apply() a no-op. Task 7 replaces
-// this file wholesale; game.js must not need to change.
+// page/draw.js — build sprite pool MỘT lần; apply() mỗi tick chỉ setProperty.
+// KHÔNG BAO GIỜ createWidget/deleteWidget trong apply() — pool cố định, các
+// slot thừa chỉ bị ẩn (VISIBLE=false) hoặc đẩy ra ngoài màn.
+//
+// Deviation so với draft brief (controller ruling 1): ninja là MỘT IMG duy
+// nhất, đổi SOURCE giữa ninja-a/ninja-b theo world.bounceCount (core tăng mỗi
+// lần nảy) — thay vì 2 IMG ninja tạo sẵn. Frame đổi bằng setProperty(SOURCE)
+// nên không cần widget thứ hai.
+//
+// Nền: band 0 mặc định "bg-dusk.png". Đổi SOURCE sang bg-sunset/bg-night theo
+// score band là việc của Task 8 — bg là mảng 2 IMG nên block đó chỉ cần set
+// SOURCE trên cả hai.
 import { W, H, img, text, FONT, COLOR } from "./ui.js";
-import { TOWER_X, TOWER_W, PLANK_W, PLANK_H, NINJA_W, NINJA_H, SHURIKEN_W, SHURIKEN_H } from "./game-core.js";
+import {
+  TOWER_X, TOWER_W, PLAY_TOP, NINJA_W, NINJA_H, SHURIKEN_W, SHURIKEN_H,
+  PLANK_W, PLANK_H, scoreOf,
+} from "./game-core.js";
+
+const PLANK_POOL = 5;
+const SHURIKEN_POOL = 3;
+const SPIN_MS = 125; // shuriken spin 8Hz: chu kỳ 125ms chia 2 frame
+const NINJA_FRAMES = ["ninja-a.png", "ninja-b.png"];
+const SHURIKEN_FRAMES = ["shuriken-a.png", "shuriken-b.png"];
+const OFFSCREEN = -100; // slot pool chưa dùng: đẩy ra ngoài màn
 
 export function buildSprites() {
-  const s = { overlay: [] };
+  const s = { overlay: [] }; // overlay là mảng thật: page/game.js push widget game over vào
 
-  // Static backdrop only: enough widgets that "pool built" (> 10 live) holds
-  // and the scene is not a black screen while Task 7 is pending. Pools mirror
-  // Task 7's shape (2 bg + 2 towers + hud + 5 planks + 3 shurikens + ninja)
-  // so the real renderer slots in without page/game.js changing.
+  // Nền: 2 IMG chồng dọc cùng PNG cao H; scroll = đổi Y modulo H.
   s.bg = [
-    img({ x: 0, y: 0, w: W, h: H, src: "bg.png" }),
-    img({ x: 0, y: H, w: W, h: H, src: "bg.png" }),
+    img({ x: 0, y: 0, w: W, h: H, src: "bg-dusk.png" }),
+    img({ x: 0, y: H, w: W, h: H, src: "bg-dusk.png" }),
   ];
+
+  // Tháp giàn gỗ: 2 IMG full-height, tĩnh suốt ván.
   s.towers = [
     img({ x: TOWER_X[0], y: 0, w: TOWER_W, h: H, src: "tower.png" }),
     img({ x: TOWER_X[1], y: 0, w: TOWER_W, h: H, src: "tower.png" }),
   ];
-  s.hudBg = img({ x: 0, y: 0, w: W, h: 40, src: "hudbg.png" });
+
+  // HUD: dải nền 40px + text điểm (ninja không bao giờ bay vào dải này).
+  s.hudBg = img({ x: 0, y: 0, w: W, h: PLAY_TOP, src: "hudbg.png" });
   s.hudText = text({ x: 8, y: 6, w: 200, size: FONT.section, color: COLOR.hud, text: "0 M" });
+
+  // Pool plank: 5 slot cố định, slot không dùng nằm ngoài màn.
   s.planks = [];
-  for (let i = 0; i < 5; i++) s.planks.push(img({ x: -100, y: -100, w: PLANK_W, h: PLANK_H, src: "plank.png" }));
+  for (let i = 0; i < PLANK_POOL; i++) {
+    s.planks.push(img({ x: OFFSCREEN, y: OFFSCREEN, w: PLANK_W, h: PLANK_H, src: "plank.png" }));
+  }
+
+  // Pool shuriken: 3 slot cố định + frame quay 8Hz đổi bằng SOURCE.
   s.shurikens = [];
-  for (let i = 0; i < 3; i++) s.shurikens.push(img({ x: -100, y: -100, w: SHURIKEN_W, h: SHURIKEN_H, src: "shuriken-a.png" }));
-  s.ninja = img({ x: -100, y: -100, w: NINJA_W, h: NINJA_H, src: "ninja-a.png" });
+  for (let i = 0; i < SHURIKEN_POOL; i++) {
+    s.shurikens.push(img({ x: OFFSCREEN, y: OFFSCREEN, w: SHURIKEN_W, h: SHURIKEN_H, src: SHURIKEN_FRAMES[0] }));
+  }
+
+  // Ninja: 1 IMG, frame A/B đổi bằng SOURCE theo số lần nảy.
+  s.ninja = img({ x: OFFSCREEN, y: OFFSCREEN, w: NINJA_W, h: NINJA_H, src: NINJA_FRAMES[0] });
 
   return s;
 }
 
-// apply() is a no-op in the stub: Task 7's real renderer takes over.
-export function apply() {}
+// Mỗi call chỉ setProperty. nowMs tuỳ chọn (game.js luôn truyền Date.now());
+// khi không có, lấy hiện tại — đủ cho test gọi apply(s, world) 2 tham số.
+// world.bounceCount (core tăng ở cả nảy plank lẫn tap) chọn frame ninja.
+export function apply(s, world, nowMs) {
+  const ms = nowMs === undefined ? Date.now() : nowMs;
+
+  // Nền scroll theo alt: Y = -(alt % H); IMG thứ hai nối tiếp phía dưới.
+  const off = world.alt % H;
+  s.bg[0].setProperty("Y", Math.floor(-off));
+  s.bg[1].setProperty("Y", Math.floor(H - off));
+
+  // HUD điểm theo mét.
+  try { s.hudText.setProperty("TEXT", scoreOf(world) + " M"); } catch (e) {}
+
+  // Planks: 5 slot; world.planks có thể ít hơn pool (slot thừa ẩn).
+  for (let i = 0; i < s.planks.length; i++) {
+    const p = world.planks[i];
+    const wgt = s.planks[i];
+    try {
+      if (p) {
+        wgt.setProperty("X", Math.floor(p.x));
+        wgt.setProperty("Y", Math.floor(p.y));
+        // Slot còn ẩn (hoặc chưa từng set VISIBLE) → hiện lên, chỉ set 1 lần.
+        if (wgt.getProperty("VISIBLE") !== true) wgt.setProperty("VISIBLE", true);
+      } else if (wgt.getProperty("VISIBLE") !== false) {
+        wgt.setProperty("VISIBLE", false);
+      }
+    } catch (e) { /* 1 widget chết không giết tick */ }
+  }
+
+  // Shurikens: 3 slot + frame quay 8Hz.
+  const spinFrame = Math.floor(ms / SPIN_MS) % 2;
+  for (let i = 0; i < s.shurikens.length; i++) {
+    const sh = world.shurikens[i];
+    const wgt = s.shurikens[i];
+    try {
+      if (sh) {
+        wgt.setProperty("X", Math.floor(sh.x));
+        wgt.setProperty("Y", Math.floor(sh.y));
+        wgt.setProperty("SOURCE", SHURIKEN_FRAMES[spinFrame]);
+        // Slot còn ẩn (hoặc chưa từng set VISIBLE) → hiện lên, chỉ set 1 lần.
+        if (wgt.getProperty("VISIBLE") !== true) wgt.setProperty("VISIBLE", true);
+      } else if (wgt.getProperty("VISIBLE") !== false) {
+        wgt.setProperty("VISIBLE", false);
+      }
+    } catch (e) { /* 1 widget chết không giết tick */ }
+  }
+
+  // Ninja: vị trí + frame A/B theo bounceCount % 2.
+  try {
+    s.ninja.setProperty("X", Math.floor(world.ninja.x));
+    s.ninja.setProperty("Y", Math.floor(world.ninja.y));
+    s.ninja.setProperty("SOURCE", NINJA_FRAMES[(world.bounceCount || 0) % 2]);
+  } catch (e) { /* 1 widget chết không giết tick */ }
+}
