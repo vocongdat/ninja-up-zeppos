@@ -23,8 +23,8 @@ ninja-up/
 ├── package.json              # npm test = node --import ./tests/support/register.mjs --test
 ├── page/
 │   ├── menu.js               # title + PLAY + kỷ lục + hướng dẫn 1 dòng
-│   └── game.js               # gameplay BasePage: setInterval + setProperty adapter
-├── page/ui.js                # palette riêng (không palette CampMate): W=390 H=450, màu nền game
+│   ├── game.js               # gameplay BasePage: setInterval + setProperty adapter
+│   ├── ui.js                 # palette riêng (không palette CampMate): W=390 H=450, màu nền game
 │   ├── game-core.js          # PURE: physics, va chạm, spawn, điểm — không import @zos/*
 │   └── draw.js               # buildSprites() (1 lần) + apply() (mỗi tick, chỉ setProperty)
 ├── utils/sound.js            # TonePlayer wrapper (best-effort, try/catch toàn bộ)
@@ -47,7 +47,7 @@ Hệ toạ độ: y=0 đỉnh màn, ninja leo lên = `alt` (px) tăng. Điểm h
 | Thành phần | Kích thước | Vị trí/giá trị khởi tạo |
 |---|---|---|
 | Tháp giàn giáo | 70px rộng, full-height | x≈65 và x≈255 (2 bên, chừa lối đi giữa ~90px) |
-| Platform (bậc nảy) | ~54×6px | gắn mép trong tháp, khoảng dọc 90–130px ngẫu nhiên |
+| Platform (bậc nảy) | ~54×6px | gắn mép trong tháp, khoảng dọc 90–130px ngẫu nhiên; pool 5 IMG xoay vòng (450px màn + scroll-ahead cần 5) |
 | Ninja | 28×36px | platform đầu tiên, giữa lối đi |
 | Shuriken | 16×16px | bay ngang trong lối đi, tốc độ 60–140 px/s |
 | HUD điểm | TEXT | thanh nền xanh dương trên đỉnh, "12 M" như ảnh Nokia |
@@ -71,7 +71,9 @@ tháp 2 IMG, platform 4 IMG (pool), shuriken 2 IMG, ninja 2 IMG (2 frame chạy)
 HUD 1 TEXT. Mỗi tick `apply(state)` chỉ `setProperty(X/Y/SOURCE…)`.
 
 - Frame ninja: 2 PNG (chân trước sau), đổi mỗi lần nảy; frame shuriken đổi theo đồng hồ 8Hz.
-- Nền scroll: 2 IMG cùng PNG cao 2×H, đổi Y modulo — không đổi SOURCE khi chỉ crossfade band.
+- Nền scroll: trong mỗi band, 2 IMG cùng PNG cao 2×H đổi Y modulo để cuộn liền mạch;
+  khi vượt ranh band, đổi SOURCE của cả 2 IMG sang PNG band mới — việc đổi SOURCE là
+  chấp nhận được vì xảy ra ~1 lần mỗi vài trăm mét, không phải mỗi tick.
 - Fallback trung thực: nếu `setProperty(SOURCE)` không được hỗ trợ trên device, frame
   đứng yên — mất hiệu ứng quay, không mất logic. Ghi nhận trong device-QA checklist.
 - **Không bao giờ** createWidget/deleteWidget trong game loop (bài học GC/flicker từ
@@ -91,7 +93,9 @@ HUD 1 TEXT. Mỗi tick `apply(state)` chỉ `setProperty(X/Y/SOURCE…)`.
 
 `menu.js` (title, PLAY, "Kỷ lục: N M", dòng hướng dẫn "Chạm để bật chéo") →
 `router.push("page/game")` → chơi → chết → overlay Game Over (điểm, kỷ lục mới?,
-"Chạm để chơi lại" + nút "Về menu") → chơi lại push lại page/game.
+"Chạm để chơi lại" + nút "Về menu") → **chơi lại = reset state trong cùng page**
+(không push mới — push mỗi lần chết sẽ chồng page vô hạn trên stack; chỉ "Về menu"
+mới `router.back()`).
 
 Kỷ lục: `localStorage` key `record`, kiểu number; ghi khi chết nếu phá kỷ lục.
 Settings: key `settings` JSON `{ muteSfx, muteMusic }` — đọc mỗi lần play sound
