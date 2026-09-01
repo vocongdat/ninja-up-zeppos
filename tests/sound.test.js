@@ -50,8 +50,44 @@ test("muteMusic silences music but not bounce", () => {
   assert.ok(mediaLog.some((e) => e.method === "start"));
 });
 
-test(" TonePlayer throwing never propagates", () => {
+test("TonePlayer throwing never propagates", () => {
+  const orig = {
+    prepare: TonePlayer.prototype.prepare,
+    start: TonePlayer.prototype.start,
+    stop: TonePlayer.prototype.stop,
+    release: TonePlayer.prototype.release,
+  };
+  const boom = () => { throw new Error("no audio"); };
+  try {
+    const s = createSound();
+    // prepare ném lỗi (sau một stop sạch)
+    TonePlayer.prototype.prepare = boom;
+    s.bounce();
+    // start ném lỗi (prepare thành công)
+    TonePlayer.prototype.prepare = orig.prepare;
+    TonePlayer.prototype.start = boom;
+    s.death();
+    // stop ném lỗi (cả trong play lẫn stopMusic)
+    TonePlayer.prototype.start = orig.start;
+    TonePlayer.prototype.stop = boom;
+    s.startMusic();
+    s.stopMusic();
+    // release ném lỗi
+    TonePlayer.prototype.stop = orig.stop;
+    TonePlayer.prototype.release = boom;
+    s.release();
+    assert.ok(true, "no throw is the contract");
+  } finally {
+    TonePlayer.prototype.prepare = orig.prepare;
+    TonePlayer.prototype.start = orig.start;
+    TonePlayer.prototype.stop = orig.stop;
+    TonePlayer.prototype.release = orig.release;
+  }
+});
+
+test("malformed settings JSON never throws and never plays", () => {
+  localStorage.setItem("settings", "{not json");
   const s = createSound();
-  s.bounce(); s.death(); s.startMusic(); s.stopMusic(); s.release();
-  assert.ok(true, "no throw is the contract");
+  s.bounce();
+  assert.equal(mediaLog.length, 0);
 });

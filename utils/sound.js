@@ -6,11 +6,12 @@ import { localStorage } from "@zos/storage";
 
 const KEY = "settings";
 
+// Trả về object settings, hoặc null khi đọc/parse hỏng (fail closed: câm).
 function readSettings() {
   try {
     const raw = localStorage.getItem(KEY);
     return raw ? JSON.parse(raw) : {};
-  } catch (e) { return {}; }
+  } catch (e) { return null; }
 }
 
 export function createSound() {
@@ -30,6 +31,7 @@ export function createSound() {
   }
   function muted(kind) {
     const s = readSettings();
+    if (s === null) return true; // settings hỏng → câm hẳn, không phát gì
     return kind === "sfx" ? !!s.muteSfx : !!s.muteMusic;
   }
   return {
