@@ -33,6 +33,28 @@ test("wav files exist with RIFF header", () => {
   }
 });
 
+// Fix round 1 (review CRITICAL): test trước đây chỉ kiểm magic "RIFF" — nó đã
+// bỏ qua lỗi ghi lệch offset fmt chunk (blockAlign ở 34 thay vì 32,
+// bitsPerSample ở 35 thay vì 34) khiến blockAlign=0 / bitsPerSample=2049 và
+// CoreAudio từ chối mọi WAV. Parse header từ bytes: PCM 8-bit 8kHz mono,
+// data chunk đúng bằng phần còn lại của file.
+test("wav headers parse as PCM 8-bit 8kHz mono with correct chunk sizes", () => {
+  for (const f of ["bounce.wav", "death.wav", "music.wav"]) {
+    const buf = readFileSync(join(root, "assets", f));
+    assert.equal(buf.toString("ascii", 8, 12), "WAVE", f + " WAVE");
+    assert.equal(buf.toString("ascii", 12, 16), "fmt ", f + " fmt chunk");
+    assert.equal(buf.readUInt32LE(16), 16, f + " fmt chunk size = 16 (PCM)");
+    assert.equal(buf.readUInt16LE(20), 1, f + " audio format = PCM");
+    assert.equal(buf.readUInt16LE(22), 1, f + " channels = 1 (mono)");
+    assert.equal(buf.readUInt32LE(24), 8000, f + " sample rate = 8000");
+    assert.equal(buf.readUInt32LE(28), 8000, f + " byte rate = 8000 (8000 × 1 ch × 1 byte)");
+    assert.equal(buf.readUInt16LE(32), 1, f + " block align = 1 byte");
+    assert.equal(buf.readUInt16LE(34), 8, f + " bits per sample = 8");
+    assert.equal(buf.toString("ascii", 36, 40), "data", f + " data chunk");
+    assert.equal(buf.readUInt32LE(40), buf.length - 44, f + " data size = file size - 44");
+  }
+});
+
 // Bổ sung (additive, không thay 2 test của brief): đọc IHDR kiểm kích thước +
 // color type 3 (palette 4-bit) đúng như hợp đồng mà page/draw.js phụ thuộc.
 // IHDR nằm sau 8 byte signature + 4 byte length + 4 byte type → offset 16.
@@ -57,4 +79,15 @@ test("PNG IHDR declares the sizes draw.js builds widgets for", () => {
     assert.equal(buf[25], 3, f + " color type = indexed palette");
     assert.equal(buf[24], 4, f + " bit depth = 4");
   }
+});
+
+// Fix round 1 (review IMPORTANT): ninja-a/ninja-b trước đây byte-identical
+// (các rect chân phủ cùng một union pixel) → animation 2 frame là no-op.
+// Hai file PNG phải khác nhau thật sự.
+test("ninja-a.png and ninja-b.png are different frames", () => {
+  const a = readFileSync(join(root, "assets", "ninja-a.png"));
+  const b = readFileSync(join(root, "assets", "ninja-b.png"));
+  assert.notEqual(a.length, 0);
+  assert.notEqual(b.length, 0);
+  assert.notEqual(Buffer.compare(a, b), 0, "ninja-a.png must differ from ninja-b.png");
 });

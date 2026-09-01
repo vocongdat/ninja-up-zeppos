@@ -182,7 +182,6 @@ function towerPng() {
 }
 
 // ---------- Hudbg: 390×40 đặc ----------
-// ---------- Hudbg: 390×40 đặc ----------
 function hudbgPng() {
   const rows = blank(W, 40, 1);
   return png(W, 40, [0x000000, COLOR.hudBg], null, rows);
@@ -236,15 +235,16 @@ function ninjaPng(frame) {
   rect(rows, 22, 10, 4, 2, 2);
   // Thân 14×16: từ y=14 đến 30, căn giữa.
   rect(rows, 7, 14, 14, 16, 1);
-  // Chân: frame A = chân trước duỗi/sau co, frame B = ngược lại.
+  // Chân: 2 pose THẬT SỰ khác nhau (fix round 1 — bản trước 2 frame trùng nhau
+  // vì các rect leg phủ cùng một vùng pixel). Frame A: chân trái duỗi dài tới
+  // y=34, chân phải co ngắn; frame B: ngược lại (trái co, phải duỗi dài) —
+  // union pixel của 2 frame khác nhau ở cả 2 bên.
   if (frame === 0) {
-    rect(rows, 7, 30, 5, 5, 1);   // chân trái duỗi
-    rect(rows, 17, 30, 4, 3, 1);  // chân phải co
-    rect(rows, 17, 33, 4, 2, 1);
+    rect(rows, 7, 30, 5, 5, 1);   // chân trái duỗi (y 30..34)
+    rect(rows, 17, 32, 4, 3, 1);  // chân phải co (y 32..34)
   } else {
-    rect(rows, 7, 30, 5, 3, 1);   // chân trái co
-    rect(rows, 7, 33, 5, 2, 1);
-    rect(rows, 17, 30, 4, 5, 1);  // chân phải duỗi
+    rect(rows, 7, 32, 5, 3, 1);   // chân trái co (y 32..34)
+    rect(rows, 17, 30, 4, 5, 1);  // chân phải duỗi (y 30..34)
   }
   return png(28, 36, palette, 0, rows);
 }
@@ -279,9 +279,9 @@ function wav(samples) {
   buf.writeUInt16LE(1, 20);       // PCM
   buf.writeUInt16LE(1, 22);       // mono
   buf.writeUInt32LE(8000, 24);    // sample rate
-  buf.writeUInt32LE(8000, 28);    // byte rate
-  buf.writeUInt16LE(1, 34);       // block align
-  buf.writeUInt16LE(8, 35);       // bits per sample (offset 34+2)
+  buf.writeUInt32LE(8000, 28);    // byte rate = sampleRate × channels × 1 byte
+  buf.writeUInt16LE(1, 32);       // block align = channels × bytes/sample = 1
+  buf.writeUInt16LE(8, 34);       // bits per sample
   buf.write("data", 36, "ascii");
   buf.writeUInt32LE(data.length, 40);
   data.copy(buf, 44);
@@ -307,7 +307,7 @@ function sweep(durMs, f0, f1, fadeStart, gain = 0.9) {
     return Math.sin(2 * Math.PI * f * t) * gain * env;
   });
 }
-// Music: 8 note pentatonic 120 BPM (mỗi note 150ms), sine + decay envelope.
+// Music: 8 note pentatonic 120 BPM (mỗi note 300ms), sine + decay envelope.
 function music() {
   const PENTA = [392, 440, 523.25, 587.33, 659.25, 587.33, 523.25, 440]; // G4 A4 C5 D5 E5 D5 C5 A4
   const NOTE_MS = 300; // 8 note × 300ms = 2.4s
