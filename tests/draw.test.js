@@ -91,6 +91,49 @@ test("apply survives a dead bg widget and still renders the rest of the frame", 
   assert.equal(s.bg[1].getProperty("Y"), Math.floor(H - (w.alt % H)));
 });
 
+// --- Task 8: band-switch nền theo điểm (0/10/20 M) ---
+
+// scoreOf = floor(alt / 8) → alt 200 cho điểm 25 → band "bg-night.png".
+// Cả 2 IMG nền phải đổi SOURCE (không guard getProperty — set trùng giá trị
+// vô hại trên máy thật, pool chỉ 2 widget); block nằm NGOÀI try của 2 lệnh
+// setProperty("Y") vì mỗi set tự có try riêng.
+test("band switches to bg-night.png at score >= 20 (both bg IMGs)", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.alt = 200; // scoreOf = 25 ≥ 20
+  apply(s, w);
+  assert.equal(s.hudText.getProperty("TEXT"), "25 M");
+  assert.equal(s.bg[0].getProperty("SOURCE"), "bg-night.png");
+  assert.equal(s.bg[1].getProperty("SOURCE"), "bg-night.png");
+});
+
+test("band stays bg-dusk.png while score < 10", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.alt = 79; // scoreOf = 9, dưới mốc 10
+  apply(s, w);
+  assert.equal(s.bg[0].getProperty("SOURCE"), "bg-dusk.png");
+  assert.equal(s.bg[1].getProperty("SOURCE"), "bg-dusk.png");
+});
+
+test("band switches to bg-sunset.png at score 10..19", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.alt = 80; // scoreOf = 10
+  apply(s, w);
+  assert.equal(s.bg[0].getProperty("SOURCE"), "bg-sunset.png");
+  assert.equal(s.bg[1].getProperty("SOURCE"), "bg-sunset.png");
+});
+
+test("band-switch survives a dead bg widget and still sets the survivor", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.alt = 200; // scoreOf = 25
+  hmUI.deleteWidget(s.bg[0]);
+  assert.doesNotThrow(() => apply(s, w));
+  assert.equal(s.bg[1].getProperty("SOURCE"), "bg-night.png", "bg[1] vẫn đổi band");
+});
+
 test("shuriken frame flips at 8Hz via nowMs", () => {
   const s = buildSprites();
   const w = createWorld(() => 0.5);

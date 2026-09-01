@@ -7,9 +7,9 @@
 // lần nảy) — thay vì 2 IMG ninja tạo sẵn. Frame đổi bằng setProperty(SOURCE)
 // nên không cần widget thứ hai.
 //
-// Nền: band 0 mặc định "bg-dusk.png". Đổi SOURCE sang bg-sunset/bg-night theo
-// score band là việc của Task 8 — bg là mảng 2 IMG nên block đó chỉ cần set
-// SOURCE trên cả hai.
+// Nền: band 0 mặc định "bg-dusk.png". apply() đổi SOURCE sang bg-sunset/
+// bg-night theo score band mốc 10/20 M (Task 8) trên cả 2 IMG nền, mỗi set
+// một try riêng.
 import { W, H, img, text, FONT, COLOR } from "./ui.js";
 import {
   TOWER_X, TOWER_W, PLAY_TOP, NINJA_W, NINJA_H, SHURIKEN_W, SHURIKEN_H,
@@ -74,6 +74,14 @@ export function apply(s, world, nowMs) {
 
   // HUD điểm theo mét.
   try { s.hudText.setProperty("TEXT", scoreOf(world) + " M"); } catch (e) {}
+
+  // Nền 3 band theo điểm (spec: chiều → hoàng hôn → đêm sao). Task 8.
+  // KHÔNG guard getProperty để bỏ qua set trùng giá trị: setProperty với cùng
+  // giá trị vô hại trên máy thật, pool chỉ 2 widget. Mỗi set một try riêng —
+  // 1 nền chết không chặn nền còn lại đổi band (đúng pattern của 2 lệnh Y trên).
+  const band = scoreOf(world) < 10 ? "bg-dusk.png" : scoreOf(world) < 20 ? "bg-sunset.png" : "bg-night.png";
+  try { s.bg[0].setProperty("SOURCE", band); } catch (e) {}
+  try { s.bg[1].setProperty("SOURCE", band); } catch (e) {}
 
   // Planks: 5 slot; world.planks có thể ít hơn pool (slot thừa ẩn).
   for (let i = 0; i < s.planks.length; i++) {
