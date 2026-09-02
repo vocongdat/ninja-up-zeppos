@@ -85,11 +85,13 @@ export function apply(s, world, nowMs) {
   try { s.bg[1].setProperty("SOURCE", band); } catch (e) {}
 
   // Planks: 5 slot; world.planks có thể ít hơn pool (slot thừa ẩn).
+  // Cull plank đã bay trên đỉnh màn (M2): y + PLANK_H < PLAY_TOP → ẩn đi,
+  // không để nó vẽ đè lên dải HUD điểm.
   for (let i = 0; i < s.planks.length; i++) {
     const p = world.planks[i];
     const wgt = s.planks[i];
     try {
-      if (p) {
+      if (p && p.y + PLANK_H >= PLAY_TOP) {
         wgt.setProperty("X", Math.floor(p.x));
         wgt.setProperty("Y", Math.floor(p.y));
         // Slot còn ẩn (hoặc chưa từng set VISIBLE) → hiện lên, chỉ set 1 lần.

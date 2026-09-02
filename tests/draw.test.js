@@ -13,7 +13,7 @@ import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import hmUI, { resetRegistry, registry } from "@zos/ui";
 import { buildSprites, apply } from "../page/draw.js";
-import { createWorld } from "../page/game-core.js";
+import { createWorld, PLAY_TOP, PLANK_H, PLANK_W } from "../page/game-core.js";
 import { H } from "../page/ui.js";
 
 beforeEach(() => { resetRegistry(); });
@@ -154,4 +154,35 @@ test("shuriken frame flips at 8Hz via nowMs", () => {
   assert.equal(srcA, "shuriken-a.png");
   assert.equal(srcB, "shuriken-b.png");
   assert.notEqual(srcA, srcB);
+});
+
+// --- M2 (final review): plank phía trên đỉnh màn bị culled, không vẽ đè HUD ---
+
+test("plank fully above PLAY_TOP is culled to VISIBLE false", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  // createWorld tạo 9 plank; để pool 5 slot phản chiếu world, cắt còn 3:
+  // [0] trên màn, [1] đáy chạm đúng PLAY_TOP (còn thấy), [2] bay quá đỉnh.
+  w.planks = [
+    { x: 150, y: 200, w: PLANK_W, h: PLANK_H },
+    { x: 160, y: PLAY_TOP - PLANK_H, w: PLANK_W, h: PLANK_H },
+    { x: 170, y: PLAY_TOP - PLANK_H - 2, w: PLANK_W, h: PLANK_H },
+  ];
+  apply(s, w);
+  assert.equal(s.planks[0].getProperty("VISIBLE"), true, "on-screen plank rendered");
+  assert.equal(s.planks[1].getProperty("VISIBLE"), true, "plank whose bottom edge is exactly PLAY_TOP stays visible");
+  assert.equal(s.planks[2].getProperty("VISIBLE"), false, "plank above PLAY_TOP culled");
+  assert.equal(s.planks[3].getProperty("VISIBLE"), false, "culling extends to the rest of the pool");
+});
+
+test("culled plank reappears when it scrolls back into view", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.planks[0].y = PLAY_TOP - PLANK_H - 5;      // trên đỉnh màn
+  apply(s, w);
+  assert.equal(s.planks[0].getProperty("VISIBLE"), false, "culled while above");
+  w.planks[0].y = 200;                          // camera kéo lại vào màn
+  apply(s, w);
+  assert.equal(s.planks[0].getProperty("VISIBLE"), true, "visible again after re-entering");
+  assert.equal(s.planks[0].getProperty("Y"), 200);
 });
