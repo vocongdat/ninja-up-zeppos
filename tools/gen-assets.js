@@ -344,3 +344,15 @@ for (const [rel, buf] of Object.entries(files)) {
   writeFileSync(join(root, rel), buf);
   console.log(rel.padEnd(24) + buf.length + " bytes");
 }
+
+// ---------- Mirror sang assets/bip6/ và assets/bip6-2/ ----------
+// zpm 3.4.2 đóng gói asset device CHỈ từ assets/<target>/ (mỗi target một thư
+// mục), KHÔNG đọc assets/ gốc. Nếu chỉ sinh assets/ mà quên mirror, .zab ships
+// bản cũ của thư mục target — đây chính là nguyên nhân màn hình đen còn sót
+// sau 2 vòng fix trước (bản 4-bit palette cũ vẫn nằm trong assets/bip6*/).
+for (const target of ["bip6", "bip6-2"]) {
+  for (const [rel, buf] of Object.entries(files)) {
+    writeFileSync(join(root, "assets", target, rel.replace(/^assets\//, "")), buf);
+  }
+  console.log(`assets/${target}/ mirrored (${Object.keys(files).length} files)`);
+}
