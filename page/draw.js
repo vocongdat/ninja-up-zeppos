@@ -17,7 +17,7 @@ import {
 } from "./game-core.js";
 
 const PLANK_POOL = 5;
-const SHURIKEN_POOL = 3;
+const SHURIKEN_POOL = 5;
 const SPIN_MS = 125; // shuriken spin 8Hz: chu kỳ 125ms chia 2 frame
 const NINJA_FRAMES = ["ninja-a.png", "ninja-b.png"];
 const SHURIKEN_FRAMES = ["shuriken-a.png", "shuriken-b.png"];
@@ -48,7 +48,8 @@ export function buildSprites() {
     s.planks.push(img({ x: OFFSCREEN, y: OFFSCREEN, w: PLANK_W, h: PLANK_H, src: "plank.png" }));
   }
 
-  // Pool shuriken: 3 slot cố định + frame quay 8Hz đổi bằng SOURCE.
+  // Pool shuriken: 5 slot cố định (F4: despawn theo y + spawn trên đỉnh màn
+  // vẫn có thể đạt 5 đồng thời) + frame quay 8Hz đổi bằng SOURCE.
   s.shurikens = [];
   for (let i = 0; i < SHURIKEN_POOL; i++) {
     s.shurikens.push(img({ x: OFFSCREEN, y: OFFSCREEN, w: SHURIKEN_W, h: SHURIKEN_H, src: SHURIKEN_FRAMES[0] }));
@@ -99,7 +100,7 @@ export function apply(s, world, nowMs) {
     } catch (e) { /* 1 widget chết không giết tick */ }
   }
 
-  // Shurikens: 3 slot + frame quay 8Hz.
+  // Shurikens: 5 slot + frame quay 8Hz.
   const spinFrame = Math.floor(ms / SPIN_MS) % 2;
   for (let i = 0; i < s.shurikens.length; i++) {
     const sh = world.shurikens[i];

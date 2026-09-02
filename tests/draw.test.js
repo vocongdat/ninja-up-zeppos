@@ -25,12 +25,15 @@ function liveByType() {
   return out;
 }
 
-test("buildSprites creates a fixed pool (bg2, towers2, hudBg+text, planks5, shuriken3, ninja1)", () => {
+test("buildSprites creates a fixed pool (bg2, towers2, hudBg+text, planks5, shuriken5, ninja1)", () => {
   const s = buildSprites();
   const types = liveByType();
   // Ninja là 1 IMG duy nhất đổi SOURCE (ruling 1) — không phải 2 IMG như brief gốc.
-  // Tổng: bg 2 + towers 2 + hudBg 1 + planks 5 + shurikens 3 + ninja 1.
-  assert.equal(types.IMG, 2 + 2 + 1 + 5 + 3 + 1, "bg 2 + towers 2 + hudBg 1 + planks 5 + shurikens 3 + ninja 1");
+  // Tổng (Task 7 binding ruling: đếm theo đúng code của buildSprites, từng hạng tử):
+  // bg 2 + towers 2 + hudBg 1 + planks 5 + shurikens 5 + ninja 1 = 16 IMG.
+  // (F4: shuriken pool 3 → 5 — despawn theo y + spawn trên đỉnh màn vẫn có thể
+  // đạt 5 shuriken đang bay đồng thời; sim vẫn ≤ 5.)
+  assert.equal(types.IMG, 2 + 2 + 1 + 5 + 5 + 1, "bg 2 + towers 2 + hudBg 1 + planks 5 + shurikens 5 + ninja 1 = 16");
   assert.equal(types.TEXT, 1, "HUD text");
   // Key set mà page/game.js phụ thuộc; overlay là mảng thật để push widget game over.
   for (const key of ["bg", "towers", "planks", "shurikens", "ninja", "hudText", "overlay"]) {
@@ -41,6 +44,8 @@ test("buildSprites creates a fixed pool (bg2, towers2, hudBg+text, planks5, shur
   // Đọc qua getProperty("SOURCE") — fake alias src tạo-lúc-tạo-widget → source.
   assert.equal(s.bg[0].getProperty("SOURCE"), "bg-dusk.png");
   assert.equal(s.bg[1].getProperty("SOURCE"), "bg-dusk.png");
+  // Pool shuriken đủ 5 slot (F4).
+  assert.equal(s.shurikens.length, 5, "shuriken pool has 5 slots");
 });
 
 test("apply positions planks and ninja from world state", () => {
@@ -73,6 +78,8 @@ test("shuriken slots beyond live count are hidden", () => {
   assert.equal(s.shurikens[0].getProperty("VISIBLE"), true);
   assert.equal(s.shurikens[1].getProperty("VISIBLE"), false);
   assert.equal(s.shurikens[2].getProperty("VISIBLE"), false);
+  assert.equal(s.shurikens[3].getProperty("VISIBLE"), false);
+  assert.equal(s.shurikens[4].getProperty("VISIBLE"), false);
 });
 
 test("apply survives a dead bg widget and still renders the rest of the frame", () => {
