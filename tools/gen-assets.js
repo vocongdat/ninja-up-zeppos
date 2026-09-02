@@ -42,7 +42,6 @@ function crc32(buf) {
   return (c ^ 0xffffffff) >>> 0;
 }
 
-// ---------- PNG 4-bit palette encoder ----------
 function chunk(type, data) {
   const out = Buffer.alloc(12 + data.length);
   out.writeUInt32BE(data.length, 0);
@@ -51,42 +50,42 @@ function chunk(type, data) {
   out.writeUInt32BE(crc32(out.subarray(4, 8 + data.length)), 8 + data.length);
   return out;
 }
-// pixels: mảng chỉ số palette theo hàng; palette: [r,g,b,...]; alpha: index
-// trong suốt hoặc null. LUÔN dùng filter 0 (None): mọi filter ≠ 0 của PNG
-// hoạt động trên nguyên BYTE, còn 4-bit/pixel thì 1 byte chứa 2 pixel — cộng
-// byte prior vào byte hiện tại làm tràn sang nibble kề và LOẠN thứ tự palette
-// giữa 2 pixel trong cùng byte (plank/hudbg từng dính lỗi này).
+
+// ---------- PNG RGBA 8-bit encoder ----------
+// Vì sao RGBA 8-bit chứ không phải 4-bit palette: máy đích Bip 6 render được
+// chắc chắn RGBA (bản CampMate chạy tốt dùng RGBA 8-bit qua build), còn docs
+// IMG widget khuyên "24-bit or 32-bit png with RGB or RGBA". 4-bit palette
+// (colorType 3) là dạng doc không nhắc đến — và các .zab build trước nó bị
+// màn đen trên máy thật. PNG ở đây tự encode tay (zlib builtin, không PIL):
+// mỗi pixel 4 byte RGBA, alpha 255 đặc / 0 trong suốt, filter 0 (None).
 function png(width, height, palette, alphaIndex, pixelRows) {
-  const plte = Buffer.alloc(palette.length * 3);
-  palette.forEach((c, i) => {
-    plte[i * 3] = (c >> 16) & 0xff;
-    plte[i * 3 + 1] = (c >> 8) & 0xff;
-    plte[i * 3 + 2] = c & 0xff;
-  });
-  const bpl = Math.ceil(width / 2); // 4 bit/pixel → 2 px/byte
+  const bpl = width * 4; // 8 bit/pixel × 4 kênh RGBA
   const raw = Buffer.alloc((bpl + 1) * height);
   let p = 0;
   for (let y = 0; y < height; y++) {
-    raw[p++] = 0; // filter 0 (None) — bắt buộc cho 4-bit, xem comment hàm
+    raw[p++] = 0; // filter 0 (None)
     const row = pixelRows[y];
-    for (let x = 0; x < bpl; x++) {
-      const hi = row[x * 2] & 0x0f;
-      const lo = x * 2 + 1 < width ? row[x * 2 + 1] & 0x0f : 0;
-      raw[p++] = (hi << 4) | lo;
+    for (let x = 0; x < width; x++) {
+      const c = palette[row[x] & 0xff] >>> 0;
+      raw[p++] = (c >> 16) & 0xff;
+      raw[p++] = (c >> 8) & 0xff;
+      raw[p++] = c & 0xff;
+      raw[p++] = alphaIndex !== null && row[x] === alphaIndex ? 0 : 255;
     }
   }
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 4;  // bit depth
-  ihdr[9] = 3;  // color type: indexed
+  ihdr[8] = 8;  // bit depth
+  ihdr[9] = 6;  // color type: RGBA
   const parts = [
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk("IHDR", ihdr),
-    chunk("PLTE", plte),
+    // sRGB + gAMA để viewer chuẩn màu; device bỏ qua cũng chẳng sao.
+    chunk("gAMA", (() => { const b = Buffer.alloc(4); b.writeUInt32BE(45455, 0); return b; })()),
+    chunk("IDAT", deflateSync(raw, { level: 9 })),
+    chunk("IEND", Buffer.alloc(0)),
   ];
-  if (alphaIndex !== null) parts.push(chunk("tRNS", Buffer.from([alphaIndex])));
-  parts.push(chunk("IDAT", deflateSync(raw, { level: 9 })), chunk("IEND", Buffer.alloc(0)));
   return Buffer.concat(parts);
 }
 

@@ -56,7 +56,8 @@ test("wav headers parse as PCM 8-bit 8kHz mono with correct chunk sizes", () => 
 });
 
 // Bổ sung (additive, không thay 2 test của brief): đọc IHDR kiểm kích thước +
-// color type 3 (palette 4-bit) đúng như hợp đồng mà page/draw.js phụ thuộc.
+// RGBA 8-bit đúng như hợp đồng của page/draw.js — format docs IMG widget khuyên
+// dùng và là format đo được trong .zab CampMate chạy tốt trên Bip 6.
 // IHDR nằm sau 8 byte signature + 4 byte length + 4 byte type → offset 16.
 test("PNG IHDR declares the sizes draw.js builds widgets for", () => {
   const dims = {
@@ -76,8 +77,8 @@ test("PNG IHDR declares the sizes draw.js builds widgets for", () => {
     const buf = readFileSync(join(root, f));
     assert.equal(buf.readUInt32BE(16), w, f + " width");
     assert.equal(buf.readUInt32BE(20), h, f + " height");
-    assert.equal(buf[25], 3, f + " color type = indexed palette");
-    assert.equal(buf[24], 4, f + " bit depth = 4");
+    assert.equal(buf[25], 6, f + " color type = RGBA");
+    assert.equal(buf[24], 8, f + " bit depth = 8");
   }
 });
 
