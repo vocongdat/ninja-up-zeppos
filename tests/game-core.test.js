@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createWorld, step, scoreOf, TAP_COOLDOWN_MS, JUMP_VX, JUMP_VY, SCORE_DIV, HITBOX_SCALE,
-  PLAY_BOTTOM, PLAY_TOP,
+  PLAY_BOTTOM, PLAY_TOP, PLAY_LEFT, PLAY_RIGHT, SHURIKEN_W, SHURIKEN_H,
 } from "../page/game-core.js";
 
 const RAND = () => 0.5;
@@ -134,4 +134,57 @@ test("bounce increments bounceCount on plank landing", () => {
   w.ninja.vy = 1; // bắt đầu rơi
   step(w, 50, 0, false);
   assert.ok(w.bounceCount >= 1, "plank bounce counted");
+});
+
+// --- F4 (final review): spawn phía TRÊN đỉnh màn + despawn khi camera kéo
+// shuriken xuống dưới đáy. Trước đây spawn trong vùng nhìn thấy (y ∈
+// [PLAY_TOP+20, PLAY_TOP+200]) khiến camera kéo shuriken xuống dưới màn mà
+// không bao giờ despawn (chỉ despawn theo x) → shuriken vô hình vẫn giết.
+
+test("shuriken spawns ABOVE the screen top within the corridor", () => {
+  const w = createWorld(RAND);
+  w.nextShurikenMs = 1;
+  step(w, 33, 0, false);
+  assert.equal(w.shurikens.length, 1, "one shuriken spawned");
+  const s = w.shurikens[0];
+  assert.ok(s.y <= PLAY_TOP - 16, "y above screen top, spec §3: " + s.y);
+  assert.ok(s.y > PLAY_TOP - 16 - 60, "y within 60px above the top: " + s.y);
+  assert.ok(s.x >= PLAY_LEFT, "x inside the corridor: " + s.x);
+  assert.ok(s.x <= PLAY_RIGHT - s.w, "x + width inside the corridor: " + s.x);
+  assert.ok(Number.isInteger(s.x) && Number.isInteger(s.y), "spawn coords floored");
+});
+
+test("spawn interval formula unchanged (1.2–2.2s band from rand)", () => {
+  const w = createWorld(RAND);       // rand luôn 0.5 → mid-band 1700ms
+  w.nextShurikenMs = 1;
+  step(w, 33, 0, false);
+  assert.equal(w.nextShurikenMs, 1700, "mid interval (1200+0.5*1000) preserved");
+});
+
+test("shuriken camera-dragged past PLAY_BOTTOM + 40 despawns", () => {
+  const w = createWorld(RAND);
+  // Shuriken trên màn, rồi camera kéo cả thế giới xuống thật sâu.
+  w.shurikens.push({ x: 200, y: PLAY_TOP + 5, w: 16, h: 16, vx: 60 });
+  w.ninja.y = PLAY_TOP;              // giữ điểm camera
+  w.ninja.vy = -420;                 // đang bay lên → camera push
+  step(w, 200, 0, false);            // push = (PLAY_TOP+60)-ninja.y sau tích phân
+  const dragged = w.shurikens[0];
+  if (dragged && dragged.y > PLAY_BOTTOM + 40) {
+    assert.fail("should have been despawned this step");
+  }
+  // Đẩy đủ sâu để vượt PLAY_BOTTOM + 40 trong 1 step: trực tiếp qua 2 bước.
+  while (w.shurikens.length > 0 && w.shurikens[0].y <= PLAY_BOTTOM + 40) {
+    w.ninja.y = PLAY_TOP;
+    w.ninja.vy = -420;
+    step(w, 50, 100, false);
+    if (w.dead) break;
+  }
+  assert.equal(w.shurikens.length, 0, "lingering shuriken despawned once dragged below PLAY_BOTTOM+40");
+});
+
+test("shuriken still despawns on x exit", () => {
+  const w = createWorld(RAND);
+  w.shurikens.push({ x: -17, y: 100, w: 16, h: 16, vx: -100 });
+  step(w, 33, 0, false);              // x → -20.3 < -SHURIKEN_W - 4 = -20
+  assert.equal(w.shurikens.length, 0, "x-exit despawn preserved");
 });

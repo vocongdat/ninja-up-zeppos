@@ -136,19 +136,24 @@ export function step(world, dtMs, nowMs, wantTap) {
     world.alt += push;
   }
 
-  // 5. Shuriken: di chuyển ngang, rời màn thì xoá; spawn theo đồng hồ alt.
+  // 5. Shuriken: di chuyển ngang, rời màn (theo x HOẶC bị camera kéo xuống
+  // dưới đáy + 40 như plank) thì xoá; spawn theo đồng hồ. Spawn ở TRÊN đỉnh
+  // màn (spec §3): shuriken bay vào lối đi từ ngoài khung thay vì hiện ra
+  // giữa màn — và không còn sinh bên trong vùng bị camera kéo, thủ tiêu chiến
+  // thuật "giữ camera" bằng tap-spam.
   for (let i = world.shurikens.length - 1; i >= 0; i--) {
     const s = world.shurikens[i];
     s.x += s.vx * dt;
     if (s.x < -SHURIKEN_W - 4 || s.x > 390 + 4) world.shurikens.splice(i, 1);
+    else if (s.y > PLAY_BOTTOM + 40) world.shurikens.splice(i, 1);
   }
   world.nextShurikenMs -= dtMs;
   if (world.nextShurikenMs <= 0) {
     const fromLeft = rand() < 0.5;
     const speed = randRange(rand, SHURIKEN_SPEED_MIN, SHURIKEN_SPEED_MAX);
     world.shurikens.push({
-      x: fromLeft ? -SHURIKEN_W : 390,
-      y: randRange(rand, PLAY_TOP + 20, PLAY_TOP + 200),
+      x: PLAY_LEFT + Math.floor(rand() * (PLAY_RIGHT - PLAY_LEFT - SHURIKEN_W)),
+      y: PLAY_TOP - SHURIKEN_H - Math.floor(rand() * 60),
       w: SHURIKEN_W, h: SHURIKEN_H, vx: fromLeft ? speed : -speed,
     });
     world.nextShurikenMs = randRange(rand, SHURIKEN_INTERVAL_MIN_MS, SHURIKEN_INTERVAL_MAX_MS);
