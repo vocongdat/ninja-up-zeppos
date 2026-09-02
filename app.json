@@ -14,8 +14,7 @@
   "targets": {
     "bip6": {
       "module": {
-        "page": { "pages": ["page/menu", "page/game"] },
-        "setting": { "path": "setting/index" }
+        "page": { "pages": ["page/menu", "page/game", "setting/index"] }
       },
       "platforms": [
         { "name": "bip6", "deviceSource": 9765121 },
