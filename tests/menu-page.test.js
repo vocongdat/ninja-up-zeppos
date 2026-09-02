@@ -40,7 +40,9 @@ test("PLAY pushes page/game", async () => {
   const play = hmUI.live().find((w) => w.type === "BUTTON" && w.props.text === "PLAY");
   play.props.click_func();
   assert.equal(router.pushes.length, 1);
-  assert.equal(router.pushes[0].page, "page/game");
+  // API thật là push({ url }) — key "page" bị router bỏ qua, máy thật không
+  // điều hướng (router.push docs: url là bắt buộc). Assert đúng contract.
+  assert.equal(router.pushes[0].url, "page/game");
 });
 
 test("settings button pushes setting/index", async () => {
@@ -48,7 +50,7 @@ test("settings button pushes setting/index", async () => {
   page.onInit(); page.build();
   const btn = hmUI.live().find((w) => w.type === "BUTTON" && w.props.text === "Cài đặt");
   btn.props.click_func();
-  assert.equal(router.pushes[0].page, "setting/index");
+  assert.equal(router.pushes[0].url, "setting/index");
 });
 
 test("onResume re-renders so a new record shows without duplicating widgets", async () => {

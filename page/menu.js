@@ -40,7 +40,7 @@ Page({
     this.keep(button({
       x: 45, y: 190, w: 300, h: 64, text: "PLAY", size: FONT.title,
       normalColor: COLOR.accent, pressColor: COLOR.cardPress, textColor: 0x062b18,
-      onClick: () => router.push({ page: "page/game" }),
+      onClick: () => router.push({ url: "page/game" }),
     }));
     this.keep(text({
       x: 0, y: 280, w: W, size: FONT.small, color: COLOR.sub, align: "center",
@@ -48,7 +48,7 @@ Page({
     }));
     this.keep(button({
       x: 45, y: 330, w: 300, h: 44, text: "Cài đặt",
-      onClick: () => router.push({ page: "setting/index" }),
+      onClick: () => router.push({ url: "setting/index" }),
     }));
   },
   build() {
