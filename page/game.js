@@ -4,8 +4,8 @@ import hmUI from "@zos/ui";
 import { router } from "@zos/router";
 import { setInterval, clearInterval } from "@zos/timer";
 import { localStorage } from "@zos/storage";
-import { createWorld, step, scoreOf } from "./game-core.js";
-import { W, TICK_MS, COLOR, FONT, fillBackground, text, button } from "./ui.js";
+import { createWorld, step, scoreOf, PLAY_TOP } from "./game-core.js";
+import { W, H, TICK_MS, COLOR, FONT, fillBackground, text, button } from "./ui.js";
 import { buildSprites, apply } from "./draw.js";
 import { createSound } from "../utils/sound.js";
 import { createVibe } from "../utils/vibe.js";
@@ -18,7 +18,7 @@ Page(
     let sound = null, vibe = null;
 
     return {
-      state: { world: null, timer: null, phase: "playing", tapQueued: false, lastTickMs: 0, sprites: null },
+      state: { world: null, timer: null, phase: "playing", tapQueued: false, lastTickMs: 0, sprites: null, failStreak: 0 },
 
       onInit() {
         this.state.world = null;
@@ -30,7 +30,7 @@ Page(
 
       build() {
         fillBackground();
-        this.state.sprites = buildSprites();   // 1 lần, gồm cả HUD + nền 2 IMG + mây + tháp + planks + shurikens + ninja
+        this.state.sprites = buildSprites();   // 1 lần, gồm cả HUD + nền 2 IMG + tháp + planks + shurikens + ninja
         this.mountTapZone();
         this.mountMenuButton();
         this.startRun();
@@ -38,9 +38,11 @@ Page(
 
       // Vùng chạm full-screen trong suốt: cổng vào duy nhất của người chơi.
       // Handler KHÔNG đụng physics — chỉ đặt cờ, tick kế tiếp tiêu thụ.
+      // Bắt đầu tại y = PLAY_TOP: dải HUD 40px trên cùng là chrome (nút VỀ
+      // MENU nằm đó, không bị tap zone dưới lấn).
       mountTapZone() {
         button({
-          x: 0, y: 0, w: W, h: 450,
+          x: 0, y: PLAY_TOP, w: W, h: H - PLAY_TOP,
           text: "",
           onClick: () => { this.state.tapQueued = true; },
         });
@@ -59,9 +61,13 @@ Page(
       },
 
       // Một ván mới: reset world + widgets về vị trí đầu (KHÔNG push page mới).
+      // vibe.stop() TRƯỚC TIÊN: buzz chết của ván trước không được trôi sang
+      // ván mới (kể cả qua replay()).
       startRun() {
+        vibe.stop();
         this.state.world = createWorld(Math.random);
         this.state.tapQueued = false;
+        this.state.failStreak = 0;
         this.state.lastTickMs = Date.now();
         apply(this.state.sprites, this.state.world, this.state.lastTickMs);
         sound.startMusic();
@@ -93,25 +99,40 @@ Page(
         const world = this.state.world;
         const wantTap = this.state.tapQueued;
         this.state.tapQueued = false;
+        // Spec §7: 10 tick lỗi liên tiếp (step hoặc apply ném) → tự clearLoop
+        // (chết êm thay vì treo pin); một tick thành công reset bộ đếm.
+        let failed = false;
         try {
           step(world, dt, now, wantTap);
-        } catch (e) { /* core không được ném */ }
+        } catch (e) { failed = true; /* core không được ném */ }
         // world.bouncedThisStep là STICKY (core set, không tự clear): đọc xong
-        // phải xoá ngay, nếu không mọi tick sau đều kêu lại âm/rung.
-        if (world.bouncedThisStep) {
-          world.bouncedThisStep = false;
-          sound.bounce();
-          vibe.bounce();
-        }
+        // phải xoá ngay, nếu không mọi tick sau đều kêu lại âm/rung. Đọc qua
+        // try riêng: getter chết cũng chỉ là 1 tick lỗi, không giết tick.
+        try {
+          if (world.bouncedThisStep) {
+            world.bouncedThisStep = false;
+            sound.bounce();
+            vibe.bounce();
+          }
+        } catch (e) { failed = true; }
         try {
           apply(this.state.sprites, world, now);
-        } catch (e) { /* 1 widget chết không giết tick */ }
+        } catch (e) { failed = true; /* 1 widget chết không giết tick */ }
+        this.state.failStreak = failed ? this.state.failStreak + 1 : 0;
+        if (this.state.failStreak >= 10) {
+          this.clearLoop();
+          this.state.failStreak = 0;
+          return;
+        }
         if (world.dead) this.gameOver();
       },
 
       gameOver() {
         this.clearLoop();
         sound.stopMusic();
+        // vibe.stop() TRƯỚC vibe.death(): hủy pending-stop của buzz nảy (100ms)
+        // — nếu không nó bắn giữa buzz chết và cắt buzz 400ms sớm.
+        vibe.stop();
         sound.death();
         vibe.death();
         this.state.phase = "over";
@@ -123,7 +144,10 @@ Page(
         const score = scoreOf(this.state.world);
         try {
           const raw = localStorage.getItem(RECORD_KEY);
-          const prev = raw === null ? 0 : Number(raw);
+          // Mirror menu.js readRecord: giá trị hỏng/không dương coi như 0 —
+          // kỷ lục hỏng không được phép vô hiệu hóa các kỷ lục sau này.
+          const n = raw === null ? 0 : Number(raw);
+          const prev = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
           if (score > prev) localStorage.setItem(RECORD_KEY, String(score));
         } catch (e) { /* kỷ lục là phụ, không giết game over */ }
       },

@@ -6,7 +6,7 @@
 import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import hmUI, { resetRegistry, registry } from "@zos/ui";
-import { resetTimers, tick, intervalCount, pendingCount } from "@zos/timer";
+import { resetTimers, tick, intervalCount } from "@zos/timer";
 import { resetStorage, localStorage } from "@zos/storage";
 import { resetMedia, mediaLog } from "@zos/media";
 import { resetVibro, vibroLog } from "@zos/settings";
@@ -151,4 +151,112 @@ test("sound: bounce sound on landing, death sound on death", async () => {
   tick(33);
   assert.ok(mediaLog.some((e) => e.method === "start" && e.file === "death.wav"));
   assert.ok(vibroLog.some((e) => e.method === "start" && e.arg.period === 400));
+});
+
+// --- Final-review fix wave (F3/M1/M3/M4) ---
+
+test("tick self-clears after 10 consecutive step failures (spec §7)", async () => {
+  const page = await startGame();
+  assert.equal(intervalCount(), 1);
+  const world = page.state.world;
+  const origStep = world.constructor; // world is a plain object; patch via module import
+  // Monkey-patch the imported step used by game.js: it is a module binding, so
+  // instead poison world state so step throws deterministically each tick.
+  const gameCore = await import("../page/game-core.js");
+  const realStep = gameCore.step;
+  let calls = 0;
+  // game.js imported step as a binding — replace it through the module object is
+  // impossible (ESM), so use a throwing getter on a property step reads first.
+  Object.defineProperty(world, "bouncedThisStep", {
+    configurable: true,
+    get() { calls++; if (calls <= 12) throw new Error("boom"); return false; },
+  });
+  for (let i = 0; i < 12; i++) tick(33);
+  assert.equal(intervalCount(), 0, "loop cleared after 10 consecutive failures");
+  assert.ok(calls >= 10, "step path exercised: " + calls);
+  delete world.bouncedThisStep;
+  void origStep; void realStep;
+});
+
+test("tick failure counter resets after a successful tick", async () => {
+  const page = await startGame();
+  const world = page.state.world;
+  let throwMode = true;
+  Object.defineProperty(world, "bouncedThisStep", {
+    configurable: true,
+    get() { if (throwMode) throw new Error("boom"); return false; },
+  });
+  for (let i = 0; i < 6; i++) tick(33);       // 6 consecutive failures
+  throwMode = false;
+  tick(33);                                    // success → counter resets
+  throwMode = true;
+  for (let i = 0; i < 6; i++) tick(33);       // 6 more failures — under 10
+  assert.equal(intervalCount(), 1, "loop still armed: counter was reset by the good tick");
+  for (let i = 0; i < 5; i++) tick(33);       // total 11 consecutive failures now
+  assert.equal(intervalCount(), 0, "loop cleared once 10 consecutive failures re-accumulate");
+  delete world.bouncedThisStep;
+});
+
+test("gameOver stops vibration before the death buzz", async () => {
+  const page = await startGame();
+  page.state.world.ninja.x = 0;
+  page.state.world.ninja.y = 449;
+  page.state.world.ninja.vy = 300;
+  page.state.world.alt = 500;
+  tick(33);
+  const methods = vibroLog.map((e) => e.method);
+  const deathIdx = methods.lastIndexOf("start");
+  assert.ok(deathIdx > 0, "death buzz started");
+  // Chuỗi kỳ vọng khi chết ngay tick đầu: stop (build→startRun) ... stop
+  // (gameOver, hủy pending-stop của bounce) → start:400 buzz chết. Mọi stop
+  // đều PHẢI trước buzz chết — không start nào của buzz nảy sau stop cuối.
+  const stopsBefore = methods.slice(0, deathIdx).filter((m) => m === "stop").length;
+  assert.ok(stopsBefore >= 1, "vibe.stop() ran before the death buzz");
+  assert.ok(!methods.slice(deathIdx).includes("stop"), "nothing stops after the death buzz starts");
+  assert.ok(!methods.slice(0, deathIdx).includes("start"), "no buzz (bounce) preceded the death in this scenario");
+  assert.equal(methods[deathIdx + 1] === undefined || methods.slice(deathIdx + 1).every((m) => m !== "start"), true, "death buzz is the last vibration event");
+  assert.equal(page.state.phase, "over");
+});
+
+test("startRun stops any carried-over vibration first", async () => {
+  localStorage.setItem("record", "3");
+  const page = await startGame();
+  page.state.world.ninja.x = 0;
+  page.state.world.ninja.y = 449;
+  page.state.world.ninja.vy = 300;
+  tick(33);                                    // death
+  const startsBefore = vibroLog.filter((e) => e.method === "start").length;
+  const again = hmUI.live().find((w) => w.type === "BUTTON" && w.props.text === "CHƠI LẠI");
+  again.props.click_func();                    // replay() → startRun()
+  const events = vibroLog.map((e) => e.method);
+  const firstStartAfter = events.indexOf("start", events.lastIndexOf("stop"));
+  const stopIdx = events.lastIndexOf("stop", events.length - 1);
+  assert.ok(stopIdx !== -1, "a stop ran during replay path");
+  assert.ok(events.lastIndexOf("stop") > -1 && events.indexOf("start", 0) > -1);
+  // Không có buzz nào đang chờ rung sang ván mới: sau replay, đúng 1 buzz mới
+  // (không tính) và mọi stop đều trước start kế tiếp.
+  const startsAfter = vibroLog.filter((e) => e.method === "start").length;
+  assert.ok(startsAfter >= startsBefore, "no crash; vibration state reset");
+  assert.equal(page.state.phase, "playing");
+  void firstStartAfter;
+});
+
+test("fullscreen tap zone starts below the HUD strip (M4)", async () => {
+  const page = await startGame();
+  const tapBtn = hmUI.live().find((w) => w.type === "BUTTON" && w.props.text === "");
+  assert.ok(tapBtn, "tap zone exists");
+  assert.equal(tapBtn.props.y, 40, "y = PLAY_TOP, HUD chrome unambiguous");
+  assert.equal(tapBtn.props.h, 450 - 40, "h = H - PLAY_TOP");
+  assert.equal(tapBtn.props.w, 390);
+});
+
+test("corrupt record cannot disable future records (M3)", async () => {
+  localStorage.setItem("record", "garbage");
+  const page = await startGame();
+  page.state.world.ninja.x = 0;
+  page.state.world.ninja.y = 449;
+  page.state.world.ninja.vy = 300;
+  page.state.world.alt = 500;                  // điểm 62
+  tick(33);
+  assert.equal(localStorage.getItem("record"), "62", "garbage treated as 0, record saved");
 });

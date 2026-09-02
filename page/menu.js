@@ -18,8 +18,8 @@ Page({
   onInit() {
     this.state = { widgets: [] };
   },
-  // keep(): track widget để có thể xoá khi re-render. card() trả về một cặp,
-  // nên flatten mảng — fillBackground/text/button trả về widget đơn.
+  // keep(): track widget để có thể xoá khi re-render. pageChrome() trả về một
+  // mảng, nên flatten — fillBackground/text/button trả về widget đơn.
   keep(created) {
     const list = Array.isArray(created) ? created : [created];
     for (const w of list) this.state.widgets.push(w);

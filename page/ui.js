@@ -67,13 +67,6 @@ export function img(opts) {
   });
 }
 
-export function card(opts) {
-  const radius = opts.radius === undefined ? 16 : opts.radius;
-  const border = hmUI.createWidget(hmUI.widget.FILL_RECT, { x: opts.x, y: opts.y, w: opts.w, h: opts.h, radius, color: COLOR.border });
-  const fill = hmUI.createWidget(hmUI.widget.FILL_RECT, { x: opts.x + 1, y: opts.y + 1, w: opts.w - 2, h: opts.h - 2, radius, color: opts.color === undefined ? COLOR.card : opts.color });
-  return [border, fill];
-}
-
 export function backButton(onClick) {
   return button({ x: 16, y: 6, w: 52, h: TAP, text: "‹", onClick });
 }
