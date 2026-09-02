@@ -32,8 +32,16 @@ npm test
 ## Build gói cài đặt (.zab)
 
 ```
-NODE_OPTIONS="--require ./zeus.config.cjs" npx zeus build
+NODE_OPTIONS="--require ./zeus.config.cjs" npx zeus build --png2vg false
 ```
+
+> **Bắt buộc `--png2vg false`:** mặc định zeus-cli 1.9.3 đổi MỌI `.png` trong
+> `assets/` sang định dạng TGA-L8 nội bộ (byte đầu `2e 01`, palette HOMS). Màn
+> hình Bip 6 đen thui khi chạy gói build mặc định — nguyên nhân nghiêm trọng
+> nhất là IMG không render được ảnh đã đổi format; bản CampMate chạy tốt trên
+> cùng máy đích đo được gửi PNG thuần (magic `89 50 4e 47`) nguyên vẹn qua
+> build. `--png2vg false` giữ PNG nguyên bản. Kiểm tra sau build:
+> `xxd -l 4 -p <zab-giải-nén>/assets/ninja-a.png` phải in `89504e47`.
 
 > **Lỗi zeus-cli 1.9.3 (module-alias bug):** zeus-cli đóng gói bản
 > `zeppos-app-utils` riêng trong `private-modules/` và định tuyến qua
