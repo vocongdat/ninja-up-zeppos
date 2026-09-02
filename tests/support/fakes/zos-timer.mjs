@@ -7,17 +7,23 @@
 //
 // setInterval()/clearInterval() is modelled as a recurring entry whose
 // callback fires every time tick(ms) advances past its period boundary.
-// tick() with no argument fires all pending timeouts (legacy behaviour).
-// tick(ms) advances intervals by ms milliseconds, firing callbacks as
-// many times as their period fits into the elapsed time.
 //
-// What it does NOT model: actual elapsed time, delay ordering, or nested
-// timers scheduled from inside a firing callback (tick() only runs what
-// was pending at the moment it was called — see its own comment below).
-// There is no jitter, no minimum-delay clamping, and — critically — no
-// modelling of the OS suspending or dropping timers in the background;
-// that behaviour only exists in this suite to the extent a test calls
-// onPause()/onResume()/onDestroy() by hand and checks pendingCount().
+// tick() semantics (matches the implementation below exactly):
+//  - tick() with NO argument fires every pending timeout exactly once,
+//    regardless of its delay, then empties the pending map. It does NOT
+//    advance intervals.
+//  - tick(ms) advances intervals by ms milliseconds, firing each callback
+//    as many times as its period fits into the elapsed time. It does NOT
+//    fire pending timeouts — drain those with a separate no-arg tick().
+//
+// What it does NOT model: actual elapsed time, delay ordering or
+// per-timeout delays (any pending timeout fires on the next no-arg tick),
+// nested timers scheduled from inside a firing callback (tick() only runs
+// what was pending at the moment it was called), jitter, minimum-delay
+// clamping, and — critically — the OS suspending or dropping timers in
+// the background; that behaviour only exists in this suite to the extent
+// a test calls onPause()/onResume()/onDestroy() by hand and checks
+// pendingCount()/intervalCount().
 export const clock = { pending: new Map(), nextId: 1, fired: 0, cleared: 0 };
 
 const intervals = new Map();
@@ -43,9 +49,10 @@ export function resetTimers() {
 export function pendingCount() { return clock.pending.size; }
 export function pendingIds() { return [...clock.pending.keys()]; }
 
-// tick() with no args: fire all pending timeouts (legacy).
-// tick(ms): advance all intervals by ms, firing each as many times as
-// its period fits. Also fires pending timeouts.
+// tick() with no args: fire every pending timeout exactly once, then empty
+// the pending map. Intervals are NOT advanced.
+// tick(ms): advance all intervals by ms, firing each as many times as its
+// period fits. Pending timeouts are NOT fired — drain them with tick().
 export function tick(ms) {
   if (ms === undefined) {
     const batch = [...clock.pending.entries()];
