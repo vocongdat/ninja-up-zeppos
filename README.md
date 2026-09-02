@@ -43,6 +43,15 @@ NODE_OPTIONS="--require ./zeus.config.cjs" npx zeus build --png2vg false
 > build. `--png2vg false` giữ PNG nguyên bản. Kiểm tra sau build:
 > `xxd -l 4 -p <zab-giải-nén>/assets/ninja-a.png` phải in `89504e47`.
 
+> **Chỉ sửa assets/ là CHƯA đủ:** zpm 3.4.2 đóng gói asset device CHỈ từ
+> `assets/<target>/` (`assets/bip6/`, `assets/bip6-2/`), KHÔNG đọc `assets/`
+> gốc. `tools/gen-assets.js` mirror tự động — chạy lại nó sau khi sửa asset,
+> không copy tay. Đừng quên: build có thể reuse asset cũ từ thư mục target nếu
+> mirror bị bỏ qua — triệu chứng là .zab mới vẫn chứa PNG bd=4/ct=3 cũ dù repo
+> đã đổi RGBA. Kiểm tra định dạng trong .zab:
+> `xxd -l 1 -s 24 -p <png>` = `08` (bit depth 8) và `xxd -l 1 -s 25 -p <png>` =
+> `06` (color type RGBA).
+
 > **Lỗi zeus-cli 1.9.3 (module-alias bug):** zeus-cli đóng gói bản
 > `zeppos-app-utils` riêng trong `private-modules/` và định tuyến qua
 > `_moduleAliases` trong package.json của chính nó, nhưng `module-alias/register`
