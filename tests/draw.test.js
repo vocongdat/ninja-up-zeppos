@@ -1,0 +1,188 @@
+// tests/draw.test.js — Task 7: page/draw.js sprite pool + apply() renderer.
+// Contract: buildSprites() builds the pool ONCE (apply never creates/deletes),
+// apply() only setProperty. Points where this file deviates from the brief's
+// draft test, per controller rulings:
+//  - Ruling 1: ninja is ONE IMG whose SOURCE alternates (not 2 ninja IMGs).
+//    The brief's arithmetic `2 + 5 + 3 + 2` also omitted the 2 tower IMGs and
+//    the hudBg IMG that the corrected draft AND the committed Task 6 stub both
+//    build, so the count here is written out term by term (see test below).
+//  - Nền band 0 dùng "bg-dusk.png" làm src ban đầu (đổi SOURCE theo score band
+//    là việc của Task 8 — không đụng ở đây).
+//  - nowMs của apply() là tuỳ chọn: game.js luôn truyền, test có thể bỏ.
+import test, { beforeEach } from "node:test";
+import assert from "node:assert/strict";
+import hmUI, { resetRegistry, registry } from "@zos/ui";
+import { buildSprites, apply } from "../page/draw.js";
+import { createWorld, PLAY_TOP, PLANK_H, PLANK_W } from "../page/game-core.js";
+import { H } from "../page/ui.js";
+
+beforeEach(() => { resetRegistry(); });
+
+// Fake @zos/ui không expose liveByType trên default export — đếm từ live().
+function liveByType() {
+  const out = {};
+  for (const w of hmUI.live()) out[w.type] = (out[w.type] || 0) + 1;
+  return out;
+}
+
+test("buildSprites creates a fixed pool (bg2, towers2, hudBg+text, planks5, shuriken5, ninja1)", () => {
+  const s = buildSprites();
+  const types = liveByType();
+  // Ninja là 1 IMG duy nhất đổi SOURCE (ruling 1) — không phải 2 IMG như brief gốc.
+  // Tổng (Task 7 binding ruling: đếm theo đúng code của buildSprites, từng hạng tử):
+  // bg 2 + towers 2 + hudBg 1 + planks 5 + shurikens 5 + ninja 1 = 16 IMG.
+  // (F4: shuriken pool 3 → 5 — despawn theo y + spawn trên đỉnh màn vẫn có thể
+  // đạt 5 shuriken đang bay đồng thời; sim vẫn ≤ 5.)
+  assert.equal(types.IMG, 2 + 2 + 1 + 5 + 5 + 1, "bg 2 + towers 2 + hudBg 1 + planks 5 + shurikens 5 + ninja 1 = 16");
+  assert.equal(types.TEXT, 1, "HUD text");
+  // Key set mà page/game.js phụ thuộc; overlay là mảng thật để push widget game over.
+  for (const key of ["bg", "towers", "planks", "shurikens", "ninja", "hudText", "overlay"]) {
+    assert.ok(key in s, "pool has key " + key);
+  }
+  assert.ok(Array.isArray(s.overlay), "overlay is a real array");
+  // Band 0 mặc định: bg-dusk.png (đổi SOURCE theo score band là việc của Task 8).
+  // Đọc qua getProperty("SOURCE") — fake alias src tạo-lúc-tạo-widget → source.
+  assert.equal(s.bg[0].getProperty("SOURCE"), "bg-dusk.png");
+  assert.equal(s.bg[1].getProperty("SOURCE"), "bg-dusk.png");
+  // Pool shuriken đủ 5 slot (F4).
+  assert.equal(s.shurikens.length, 5, "shuriken pool has 5 slots");
+});
+
+test("apply positions planks and ninja from world state", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  apply(s, w);
+  // Plank đầu nằm đúng vị trí world (world.planks[0] là plank khởi đầu y=320).
+  const p0 = w.planks[0];
+  assert.equal(s.planks[0].getProperty("X"), Math.floor(p0.x));
+  assert.equal(s.planks[0].getProperty("Y"), Math.floor(p0.y));
+  // Ninja nằm đúng vị trí + frame theo bounceCount (0 lần nảy → frame A).
+  assert.equal(s.ninja.getProperty("X"), Math.floor(w.ninja.x));
+  assert.equal(s.ninja.getProperty("Y"), Math.floor(w.ninja.y));
+  assert.equal(s.ninja.getProperty("SOURCE"), "ninja-a.png");
+});
+
+test("HUD text shows score in metres", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.alt = 160;
+  apply(s, w);
+  assert.equal(s.hudText.getProperty("TEXT"), "20 M");
+});
+
+test("shuriken slots beyond live count are hidden", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.shurikens.push({ x: 100, y: 100, w: 16, h: 16, vx: 60 });
+  apply(s, w);
+  assert.equal(s.shurikens[0].getProperty("VISIBLE"), true);
+  assert.equal(s.shurikens[1].getProperty("VISIBLE"), false);
+  assert.equal(s.shurikens[2].getProperty("VISIBLE"), false);
+  assert.equal(s.shurikens[3].getProperty("VISIBLE"), false);
+  assert.equal(s.shurikens[4].getProperty("VISIBLE"), false);
+});
+
+test("apply survives a dead bg widget and still renders the rest of the frame", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.alt = 160; // điểm 20 M
+  // Giết bg[0] như trên máy thật: widget đã bị xoá thì setProperty ném.
+  hmUI.deleteWidget(s.bg[0]);
+  // apply() trước đây để 2 lệnh setProperty("Y") nền ngoài try/catch — một widget
+  // nền chết làm ném cả frame (HUD, plank, shuriken, ninja đều treo). Bắt buộc:
+  // apply KHÔNG ném và phần còn lại của frame vẫn render.
+  assert.doesNotThrow(() => apply(s, w));
+  assert.equal(s.hudText.getProperty("TEXT"), "20 M", "HUD vẫn cập nhật");
+  assert.equal(s.ninja.getProperty("X"), Math.floor(w.ninja.x), "ninja vẫn được đặt vị trí");
+  // bg[1] còn sống vẫn nhận Y (scroll tiếp diễn với phần nền còn lại).
+  assert.equal(s.bg[1].getProperty("Y"), Math.floor(H - (w.alt % H)));
+});
+
+// --- Task 8: band-switch nền theo điểm (0/10/20 M) ---
+
+// scoreOf = floor(alt / 8) → alt 200 cho điểm 25 → band "bg-night.png".
+// Cả 2 IMG nền phải đổi SOURCE (không guard getProperty — set trùng giá trị
+// vô hại trên máy thật, pool chỉ 2 widget); block nằm NGOÀI try của 2 lệnh
+// setProperty("Y") vì mỗi set tự có try riêng.
+test("band switches to bg-night.png at score >= 20 (both bg IMGs)", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.alt = 200; // scoreOf = 25 ≥ 20
+  apply(s, w);
+  assert.equal(s.hudText.getProperty("TEXT"), "25 M");
+  assert.equal(s.bg[0].getProperty("SOURCE"), "bg-night.png");
+  assert.equal(s.bg[1].getProperty("SOURCE"), "bg-night.png");
+});
+
+test("band stays bg-dusk.png while score < 10", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.alt = 79; // scoreOf = 9, dưới mốc 10
+  apply(s, w);
+  assert.equal(s.bg[0].getProperty("SOURCE"), "bg-dusk.png");
+  assert.equal(s.bg[1].getProperty("SOURCE"), "bg-dusk.png");
+});
+
+test("band switches to bg-sunset.png at score 10..19", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.alt = 80; // scoreOf = 10
+  apply(s, w);
+  assert.equal(s.bg[0].getProperty("SOURCE"), "bg-sunset.png");
+  assert.equal(s.bg[1].getProperty("SOURCE"), "bg-sunset.png");
+});
+
+test("band-switch survives a dead bg widget and still sets the survivor", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.alt = 200; // scoreOf = 25
+  hmUI.deleteWidget(s.bg[0]);
+  assert.doesNotThrow(() => apply(s, w));
+  assert.equal(s.bg[1].getProperty("SOURCE"), "bg-night.png", "bg[1] vẫn đổi band");
+});
+
+test("shuriken frame flips at 8Hz via nowMs", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.shurikens.push({ x: 100, y: 100, w: 16, h: 16, vx: 60 });
+  apply(s, w, 0);
+  const srcA = s.shurikens[0].getProperty("SOURCE");
+  // 8Hz spin = chu kỳ 125ms chia 2 frame. Brief ghi 100ms nhưng chú thích của
+  // chính brief chỉ "dùng 200ms" — 200ms rơi vào frame kế tiếp (chu kỳ 125ms).
+  apply(s, w, 200);
+  const srcB = s.shurikens[0].getProperty("SOURCE");
+  assert.equal(srcA, "shuriken-a.png");
+  assert.equal(srcB, "shuriken-b.png");
+  assert.notEqual(srcA, srcB);
+});
+
+// --- M2 (final review): plank phía trên đỉnh màn bị culled, không vẽ đè HUD ---
+
+test("plank fully above PLAY_TOP is culled to VISIBLE false", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  // createWorld tạo 9 plank; để pool 5 slot phản chiếu world, cắt còn 3:
+  // [0] trên màn, [1] đáy chạm đúng PLAY_TOP (còn thấy), [2] bay quá đỉnh.
+  w.planks = [
+    { x: 150, y: 200, w: PLANK_W, h: PLANK_H },
+    { x: 160, y: PLAY_TOP - PLANK_H, w: PLANK_W, h: PLANK_H },
+    { x: 170, y: PLAY_TOP - PLANK_H - 2, w: PLANK_W, h: PLANK_H },
+  ];
+  apply(s, w);
+  assert.equal(s.planks[0].getProperty("VISIBLE"), true, "on-screen plank rendered");
+  assert.equal(s.planks[1].getProperty("VISIBLE"), true, "plank whose bottom edge is exactly PLAY_TOP stays visible");
+  assert.equal(s.planks[2].getProperty("VISIBLE"), false, "plank above PLAY_TOP culled");
+  assert.equal(s.planks[3].getProperty("VISIBLE"), false, "culling extends to the rest of the pool");
+});
+
+test("culled plank reappears when it scrolls back into view", () => {
+  const s = buildSprites();
+  const w = createWorld(() => 0.5);
+  w.planks[0].y = PLAY_TOP - PLANK_H - 5;      // trên đỉnh màn
+  apply(s, w);
+  assert.equal(s.planks[0].getProperty("VISIBLE"), false, "culled while above");
+  w.planks[0].y = 200;                          // camera kéo lại vào màn
+  apply(s, w);
+  assert.equal(s.planks[0].getProperty("VISIBLE"), true, "visible again after re-entering");
+  assert.equal(s.planks[0].getProperty("Y"), 200);
+});
